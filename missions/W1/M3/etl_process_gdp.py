@@ -7,44 +7,74 @@ import datetime as dt
 import pycountry
 import pycountry_convert as pc
 
-# Extract
+
+# Function Name : exctract
+# Description : extract Dataframe from given URL
+# Parameters : String url: url to extract raw data
+# Return Value : dataframe df : table of GDPs
+# Date Created : 2025/01/06
 def extract(url):
-    writeLog("Extract start")
+    writeLog("Extract start") # 시작 로그
     soup = loadSoup(url) # soup에 추출한 html 저장
-    df = findTable(soup)
-    saveDfToJson(df)
-    writeLog("Extract finished")
+    df = findTable(soup) # soup에서 목표한 테이블 찾아 DataFrame df로 저장
+    saveDfToJson(df) # DataFrame df Json으로 저장
+    writeLog("Extract finished") # 종료 로그
     return df
 
-# loadSoup
+# Function Name : loadSoup
+# Description : load Soup object from given url
+# Parameters : String url: url for loading Soup
+# Return Value : BeautifulSoup soup: parsed html
+# Date Created : 2025/01/05
 def loadSoup(url):
     html = requests.get(url).text # html Text format으로 요청
     soup = BeautifulSoup(html, "html.parser") # soup 인스턴스 생성
     return soup
 
-# findTable
+# Function Name : findTable
+# Description : find the GDP table from given BeautifulSoup object
+# Parameters : BeautifulSoup soup: soup include the table
+# Return Value : DataFrame df: table that have countries and GDP Data
+# Date Created : 2025/01/05
 def findTable(soup):
     table = soup.find("table", class_ = "wikitable sortable sticky-header-multi static-row-numbers") # GDP Table 선택, find와 select 차이 공부해야겠다
     df = pd.read_html(StringIO(str(table)))[0] # pandas dataframe으로 리딩
     return df
 
-# saveDfToJson
+# Function Name : saveDfToJson
+# Description : Save the DataFrame as a Json file before transform
+# Parameters : DataFrame df: raw table(before transform)
+# Return Value : Nothing(save the json file)
+# Date Created : 2025/01/06
 def saveDfToJson(df):
-    filePath = "missions/W1/M3/Countries_by_GDP.json"
+    filePath = "missions/W1/M3/Countries_by_GDP.json" # 파일경로 지정
     with open(filePath, "w") as f:
-        json.dump(df.to_json(), f)
+        json.dump(df.to_json(), f) # df json으로 변환 후 파일 쓰기
 
-# Transform
+# Function Name : transform
+# Description : transform the raw DataFrame to the table we want
+#               transformed table info
+#                         Country      GDP
+#                 1  United State 30337.16
+#                 2         ...
+#  
+# Parameters : DataFrame df (raw DataFrame)
+# Return Value : DataFrame df (Transformed DataFrame)
+# Date Created : 2025/01/06
 def transform(df):
-    writeLog("Transform start")
+    writeLog("Transform start") # 시작 로그
 
-    df = filterTable(df)
-    df = fillRegion(df)
+    df = filterTable(df) # DataFrame 정제(국가명 추출, 열 멀티인덱스 제거 및 정리, GDP "-"인 국가 0으로 변경, GDP열 float 타입으로 변환)
+    df = fillRegion(df) # DataFrame Region column 생성
 
-    writeLog("Transform finished")
+    writeLog("Transform finished") # 종료 로그
     return df
 
-# filterTable
+# Function Name : filterTable
+# Description : 
+# Parameters : String url: url for loading Soup
+# Return Value : BeautifulSoup soup: parsed html
+# Date Created : 2025/01/05
 def filterTable(df):
     df = df.iloc[:,[0, 1]] # 국가명, GDP 추출
     df = df.droplevel(axis = 1, level = 0) # 열 멀티인덱스 제거
@@ -57,6 +87,7 @@ def filterTable(df):
     df.drop(0, inplace=True)
     df.sort_values("GDP", ascending = False, inplace = True)
     return df
+
 
 # fillRegion
 def fillRegion(df):
@@ -84,7 +115,7 @@ def load(df):
     writeLog("Load start")
 
     print(getCountriesOverGDP(df, 100))
-    for table in getTable(df):
+    for table in getAvgList(df):
        print(table)
     
     writeLog("Load finished")
@@ -93,22 +124,24 @@ def load(df):
 def getCountriesOverGDP(df, Num):
     return df.loc[df.GDP >= Num]
 
-def getTable(df):
+def getAvgList(df):
     table = []
     regions = df["Region"].unique()
     for region in regions:
-        table.append(getTop5CountryFromRegion(df, region))
+        table.append([region,getAvgOfTop5CountryFromRegion(df, region)])
     return table
 
 # getTop5CountryFromRegion
-def getTop5CountryFromRegion(df, region):
-    return df[df["Region"] == region].head(5).drop(labels = "Region", axis = 1)
+def getAvgOfTop5CountryFromRegion(df, region):
+    top5 = df[df["Region"] == region].head(5)
+    avg = top5["GDP"].mean().round(2)
+    return avg
 
 # writeLog
 def writeLog(log):
     now = dt.datetime.now()
     log = now.strftime("%Y-%b-%d-%H-%M-%S, ") + log + "\n"
-    filePath = "missions/W1/M3/etl_projects_log.txt"
+    filePath = "missions/W1/M3/etl_project_log.txt"
     f = open(filePath, "a")
     f.write(log)
     f.close()
