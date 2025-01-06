@@ -3,10 +3,18 @@ from bs4 import BeautifulSoup
 from io import StringIO
 import pandas as pd
 import json
+import datetime as dt
 import pycountry
 import pycountry_convert as pc
 
 # Extract
+def extract(url):
+    writeLog("Extract start")
+    soup = loadSoup(url) # soup에 추출한 html 저장
+    df = findTable(soup)
+    saveDfToJson(df)
+    writeLog("Extract finished")
+    return df
 
 # loadSoup
 def loadSoup(url):
@@ -27,6 +35,14 @@ def saveDfToJson(df):
         json.dump(df.to_json(), f)
 
 # Transform
+def transform(df):
+    writeLog("Transform start")
+
+    df = filterTable(df)
+    df = fillRegion(df)
+
+    writeLog("Transform finished")
+    return df
 
 # filterTable
 def filterTable(df):
@@ -63,8 +79,15 @@ def getContinentFromCountry(countryName):
     country_continent_name = pc.convert_continent_code_to_continent_name(continentCode)
     return country_continent_name
 
-
 # Load
+def load(df):
+    writeLog("Load start")
+
+    print(getCountriesOverGDP(df, 100))
+    for table in getTable(df):
+       print(table)
+    
+    writeLog("Load finished")
 
 # getCountriesOverGDP
 def getCountriesOverGDP(df, Num):
@@ -81,22 +104,26 @@ def getTable(df):
 def getTop5CountryFromRegion(df, region):
     return df[df["Region"] == region].head(5).drop(labels = "Region", axis = 1)
 
+# writeLog
+def writeLog(log):
+    now = dt.datetime.now()
+    log = now.strftime("%Y-%b-%d-%H-%M-%S, ") + log + "\n"
+    filePath = "missions/W1/M3/etl_projects_log.txt"
+    f = open(filePath, "a")
+    f.write(log)
+    f.close()
+
 
 # main
-
 def main():
     # Extract
     url = "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)" # 국가별 GDP
-    soup = loadSoup(url) # soup에 추출한 html 저장
-    df = findTable(soup)
-    saveDfToJson(df)
+    df = extract(url)
 
     # Transform
-    df = filterTable(df)
-    df = fillRegion(df)
-
+    df = transform(df)
+    
     # Load
-    print(getCountriesOverGDP(df, 100))
-    for table in getTable(df):
-        print(table)
+    load(df)
+
 main()
