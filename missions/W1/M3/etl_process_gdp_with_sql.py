@@ -9,7 +9,7 @@ import datetime as dt
 # Extract
 # 1. GDP json API request
 def getGDPJsonFromIMF():
-    response = requests.get("https://www.imf.org/external/datamapper/api/v1/NGDPD?periods=2025,2025") # IMF에서 GDP API 요청
+    response = requests.get("https://www.imf.org/external/datamapper/api/v1/NGDPD") # IMF에서 GDP API 요청
     js = response.json()
     with open("missions/W1/M3/Countries_by_GDP_from_IMF.json", "w") as f:   # GDP json file로 저장
         f.write(response.text)
@@ -23,28 +23,41 @@ def getCountryNameDictFromIMF():
         f.write(response.text)
     return countryNames
 
-# 3. json 읽어 DF 생성
+# Transform
+# 1. json 읽어 DF 생성
 def getDFFromJson(js):
     js_values = js.get("values")
     js_NGDPD = js_values.get("NGDPD")
     df = pd.DataFrame(js_NGDPD).T
     return df
 
-# Transform
-# 1. GDP 소수 둘째 자리까지 반올림
-def roundGDP(df):
-    df["2025"] = df["2025"].apply(lambda x:round(x, 2))
+# 2. 해당년도 GDP 컬럼 선택
+def getGDPOfYear(df, year):
+    return df[str(year)].to_frame()
+
+# 3. 2025열 "GDP_USD_billion"으로 이름 변경하여 반환
+def renameGDP(df):
+    df.columns = ["GDP_USD_billion", ]
     return df
 
-# 2. GDP 순으로 정렬된 df 반환
-def sortByGDP(df):
-    return df.sort_values("2025", ascending = False)
+# 4. 결측값 제거
+def dropIfNaN(df):
+    return df.dropna(axis = 0)
 
-# 3. 국가가 아닌 row 제거
+# 5. GDP 소수 둘째 자리까지 반올림
+def roundGDP(df):
+    df["GDP_USD_billion"] = df["GDP_USD_billion"].apply(lambda x:round(x, 2))
+    return df
+
+# 6. GDP 순으로 정렬된 df 반환
+def sortByGDP(df):
+    return df.sort_values("GDP_USD_billion", ascending = False)
+
+# 7. 국가가 아닌 row 제거
 def dropIfNotCountry(df, countryNames):
     return df[df.index.isin(countryNames)]
 
-# 4. Country 열 추가
+# 8. Country 열 추가
 def addCountryName(df, countryNames):
     countries = []
     for code in df.index: # index 순회 (국가 코드가 인덱스)
@@ -52,11 +65,7 @@ def addCountryName(df, countryNames):
     df.insert(loc = 0,column = "Country", value = countries) # 국가명 열 삽입
     return df
 
-# 5. 2025열 "GDP_USD_billion"으로 이름 변경하여 반환
-def renameGDP(df):
-    return df.rename(columns = {"2025":"GDP_USD_billion"})
-
-# 6. pycountry_convert 패키지 이용하여 국가명 -> Region으로 변환
+# 9. pycountry_convert 패키지 이용하여 국가명 -> Region으로 변환
 def addRegion(df):
     regions = []
     for code in df.index:   
@@ -72,7 +81,7 @@ def addRegion(df):
     df["Region"] = regions # Region 열 삽입
     return df
 
-# 7. 인덱스 리셋하고 국가 코드 열 드랍
+# 10. 인덱스 리셋하고 국가 코드 열 드랍
 def resetIndex(df):
     return df.reset_index(drop = True)
 
@@ -122,12 +131,14 @@ def printCountriesOverGDP100B():
     if not os.path.isfile(path):    # 파일 검사
         print("DB 파일 없음")
         return
+    
+    # 이상 없으면 연결
     con = sqlite3.connect(path)
     cursor = con.cursor()
     sql = "SELECT Country, GDP_USD_billion FROM Countries_by_GDP WHERE GDP_USD_billion >= 100"
     cursor.execute(sql)
+    rows = cursor.fetchall() # sql Select
     
-    rows = cursor.fetchall()
     print("Country                     | GDP_USD_billion")
     for row in rows:
         country = "%-27s" % row[0]
@@ -141,12 +152,14 @@ def printAvgOfTop5ByRegion():
     if not os.path.isfile(path):    # 파일 검사
         print("DB 파일 없음")
         return
+    
+    # 이상 없으면 연결
     con = sqlite3.connect(path)
     cursor = con.cursor()
     # Region Distinct
     sql = "SELECT DISTINCT Region FROM Countries_by_GDP"
     cursor.execute(sql)
-    regions = cursor.fetchall()
+    regions = cursor.fetchall() # SQL Select
     
     for region in regions:
         region = region[0]
@@ -171,21 +184,21 @@ def main():
     writeLog("Extract start")
     jsGDP = getGDPJsonFromIMF()
     countryNames = getCountryNameDictFromIMF()
-    df = getDFFromJson(jsGDP)
     writeLog("Extract finished")
-
 
     # Transform
     writeLog("Transform start")
-    df = roundGDP(df) # 1
-    df = sortByGDP(df) # 2
-    df = dropIfNotCountry(df, countryNames) # 3
-    df = addCountryName(df, countryNames) # 4
-    df = addRegion(df) # 4
-    df = resetIndex(df) # 5
-    df = renameGDP(df) # 6
+    df = getDFFromJson(jsGDP) # 1
+    df = getGDPOfYear(df, 2025) # 2
+    df = renameGDP(df) # 3
+    df = dropIfNaN(df) # 4
+    df = roundGDP(df) # 5
+    df = sortByGDP(df) # 6
+    df = dropIfNotCountry(df, countryNames) # 7
+    df = addCountryName(df, countryNames) # 8
+    df = addRegion(df) # 9
+    df = resetIndex(df) # 10
     writeLog("Transform finished")
-
 
     # Load
     writeLog("Load start")
