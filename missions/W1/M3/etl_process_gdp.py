@@ -7,12 +7,13 @@ import datetime as dt
 import pycountry
 import pycountry_convert as pc
 
-
+""""
 # Function Name : exctract
 # Description : extract Dataframe from given URL
 # Parameters : String url: url to extract raw data
 # Return Value : dataframe df : table of GDPs
 # Date Created : 2025/01/06
+"""
 def extract(url):
     writeLog("Extract start") # 시작 로그
     soup = loadSoup(url) # soup에 추출한 html 저장
@@ -73,7 +74,7 @@ def transform(df):
 # Function Name : filterTable
 # Description : 
 # Parameters : String url: url for loading Soup
-# Return Value : BeautifulSoup soup: parsed html
+# Return Value : BeautifulSoup soup <- parsed html
 # Date Created : 2025/01/05
 def filterTable(df):
     df = df.iloc[:,[0, 1]] # 국가명, GDP 추출
@@ -83,11 +84,10 @@ def filterTable(df):
         if row == "—":
             df.loc[idx, "GDP"] = 0
     df = df.astype({"GDP":"float"}) # GDP열 float 타입으로 변환
-    df["GDP"] = (df["GDP"] / 1000).round(2)
-    df.drop(0, inplace=True)
+    df["GDP"] = (df["GDP"] / 1000).round(2) #GDP열 단위 1M에서 1B로 변환
+    df.drop(0, inplace=True) # 
     df.sort_values("GDP", ascending = False, inplace = True)
     return df
-
 
 # fillRegion
 def fillRegion(df):
@@ -113,16 +113,21 @@ def getContinentFromCountry(countryName):
 # Load
 def load(df):
     writeLog("Load start")
-
-    print(getCountriesOverGDP(df, 100))
-    for table in getAvgList(df):
-       print(table)
-    
     writeLog("Load finished")
+
+def result(df):
+    print(getCountriesOverGDP(df, 100))
+    printAvgListByRegion(df)
 
 # getCountriesOverGDP
 def getCountriesOverGDP(df, Num):
     return df.loc[df.GDP >= Num]
+
+def printAvgListByRegion(df):
+    table = []
+    regions = df["Region"].unique()
+    for region in regions:
+        print(region + ": ", getAvgOfTop5CountryFromRegion(df, region), "B")    
 
 def getAvgList(df):
     table = []
@@ -158,5 +163,8 @@ def main():
     
     # Load
     load(df)
+
+    # Result
+    result(df)
 
 main()
