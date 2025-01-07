@@ -10,10 +10,25 @@ import datetime as dt
 # 1. GDP json API request
 def getGDPJsonFromIMF():
     response = requests.get("https://www.imf.org/external/datamapper/api/v1/NGDPD") # IMF에서 GDP API 요청
+    path = "missions/W1/M3/Countries_by_GDP_from_IMF.json"
+    check = open(path) # 변경 사항 검사
+    if check.read() != response.text:
+        archiveGDPJson(response)    # raw data 아카이빙
+        with open(path, "w") as f:   # GDP json file로 저장
+            f.write(response.text)
+
     js = response.json()
-    with open("missions/W1/M3/Countries_by_GDP_from_IMF.json", "w") as f:   # GDP json file로 저장
-        f.write(response.text)
     return js
+
+# 1-1 json archiving
+def archiveGDPJson(response):
+    version = 1
+    path = "missions/W1/M3/archive/Countries_by_GDP_from_IMF"
+    while (os.path.isfile(path + str(version) + ".json")):
+        version += 1
+    path = path + str(version) + ".json"
+    with open(path, "w") as f:   # GDP json file로 저장
+        f.write(response.text)
 
 # 2. Country Name Dictionary API request
 def getCountryNameDictFromIMF():
