@@ -7,12 +7,14 @@ import datetime as dt
 import pycountry
 import pycountry_convert as pc
 
-""""
-# Function Name : exctract
-# Description : extract Dataframe from given URL
-# Parameters : String url: url to extract raw data
-# Return Value : dataframe df : table of GDPs
-# Date Created : 2025/01/06
+"""
+Function Name : exctract
+Type: Process
+Description : extract Dataframe from given URL
+Dependencies: loadSoup, findTable, saveDfToJson
+Parameters : String url: url to extract raw data
+Return Value : dataframe df : table of GDPs
+Date Created : 2025/01/06
 """
 def extract(url):
     writeLog("Extract start") # 시작 로그
@@ -22,46 +24,55 @@ def extract(url):
     writeLog("Extract finished") # 종료 로그
     return df
 
-# Function Name : loadSoup
-# Description : load Soup object from given url
-# Parameters : String url: url for loading Soup
-# Return Value : BeautifulSoup soup: parsed html
-# Date Created : 2025/01/05
+"""
+Function Name : loadSoup
+Description : load Soup object from given url
+Parameters : String url: url for loading Soup
+Return Value : BeautifulSoup soup: parsed html
+Date Created : 2025/01/05
+"""
 def loadSoup(url):
     html = requests.get(url).text # html Text format으로 요청
     soup = BeautifulSoup(html, "html.parser") # soup 인스턴스 생성
     return soup
 
+"""
 # Function Name : findTable
 # Description : find the GDP table from given BeautifulSoup object
 # Parameters : BeautifulSoup soup: soup include the table
 # Return Value : DataFrame df: table that have countries and GDP Data
 # Date Created : 2025/01/05
+"""
 def findTable(soup):
     table = soup.find("table", class_ = "wikitable sortable sticky-header-multi static-row-numbers") # GDP Table 선택, find와 select 차이 공부해야겠다
     df = pd.read_html(StringIO(str(table)))[0] # pandas dataframe으로 리딩
     return df
 
-# Function Name : saveDfToJson
-# Description : Save the DataFrame as a Json file before transform
-# Parameters : DataFrame df: raw table(before transform)
-# Return Value : Nothing(save the json file)
-# Date Created : 2025/01/06
+"""
+Function Name : saveDfToJson
+Description : Save the DataFrame as a Json file before transform
+Parameters : DataFrame df: raw table(before transform)
+Return Value : Nothing(save the json file)
+Date Created : 2025/01/06
+"""
 def saveDfToJson(df):
     filePath = "missions/W1/M3/Countries_by_GDP.json" # 파일경로 지정
     with open(filePath, "w") as f:
         json.dump(df.to_json(), f) # df json으로 변환 후 파일 쓰기
 
-# Function Name : transform
-# Description : transform the raw DataFrame to the table we want
-#               transformed table info
-#                         Country      GDP
-#                 1  United State 30337.16
-#                 2         ...
-#  
-# Parameters : DataFrame df (raw DataFrame)
-# Return Value : DataFrame df (Transformed DataFrame)
-# Date Created : 2025/01/06
+"""
+Function Name: transform
+Description: transform the raw DataFrame to the table we want
+             transformed table info
+                        Country      GDP
+                1  United State 30337.16
+                2         ...
+
+Dependencies: filterTable, fillRegion
+Parameters: DataFrame df (raw DataFrame)
+Return Value: DataFrame df (Transformed DataFrame)
+Date Created: 2025/01/06
+"""
 def transform(df):
     writeLog("Transform start") # 시작 로그
 
@@ -71,11 +82,13 @@ def transform(df):
     writeLog("Transform finished") # 종료 로그
     return df
 
-# Function Name : filterTable
-# Description : 
-# Parameters : String url: url for loading Soup
-# Return Value : BeautifulSoup soup <- parsed html
-# Date Created : 2025/01/05
+"""
+Function Name : filterTable
+Description : 
+Parameters : String url: url for loading Soup
+Return Value : BeautifulSoup soup <- parsed html
+Date Created : 2025/01/05
+"""
 def filterTable(df):
     df = df.iloc[:,[0, 1]] # 국가명, GDP 추출
     df = df.droplevel(axis = 1, level = 0) # 열 멀티인덱스 제거
