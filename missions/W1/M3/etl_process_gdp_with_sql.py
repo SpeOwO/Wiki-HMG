@@ -1,66 +1,199 @@
 import requests
 import json
 import pandas as pd
-import pycountry
 import pycountry_convert
+import sqlite3
+import os
+import datetime as dt
 
+# Extract
+# 1. GDP json API request
 def getGDPJsonFromIMF():
-    response = requests.get("https://www.imf.org/external/datamapper/api/v1/NGDPD?periods=2025,2025")
+    response = requests.get("https://www.imf.org/external/datamapper/api/v1/NGDPD?periods=2025,2025") # IMF에서 GDP API 요청
     js = response.json()
-    with open("missions/W1/M3/Countries_by_GDP_from_IMF.json", "w") as f:
+    with open("missions/W1/M3/Countries_by_GDP_from_IMF.json", "w") as f:   # GDP json file로 저장
         f.write(response.text)
     return js
 
+# 2. Country Name Dictionary API request
 def getCountryNameDictFromIMF():
-    response = requests.get("https://www.imf.org/external/datamapper/api/v1/countries")
+    response = requests.get("https://www.imf.org/external/datamapper/api/v1/countries") # IMF에서 국가 목록 API 리퀘스트
     countryNames = response.json()["countries"]
-    with open("missions/W1/M3/Country_Names.json", "w") as f:
+    with open("missions/W1/M3/Country_Names.json", "w") as f: # 국가 목록 json file로 저장
         f.write(response.text)
     return countryNames
 
+# 3. json 읽어 DF 생성
 def getDFFromJson(js):
     js_values = js.get("values")
     js_NGDPD = js_values.get("NGDPD")
-    print(js_NGDPD)
     df = pd.DataFrame(js_NGDPD).T
     return df
 
-def addCountryName(df, countryNames):
-    # 나라 아니면 행 제거
-    df.reset_index(inplace = True)
-    df.rename(columns = {"index":"code"}, inplace = True)
-    df.rename(columns = {"2025":"GDP_USD_billion"}, inplace = True)
-    df = df[df["code"].isin(countryNames)]
-    col = []
-    for code in df["code"]:
-        col.append(countryNames[code]["label"])
-    df.insert(loc = 0,column = "Country", value = col)
+# Transform
+# 1. GDP 소수 둘째 자리까지 반올림
+def roundGDP(df):
+    df["2025"] = df["2025"].apply(lambda x:round(x, 2))
     return df
 
+# 2. GDP 순으로 정렬된 df 반환
+def sortByGDP(df):
+    return df.sort_values("2025", ascending = False)
+
+# 3. 국가가 아닌 row 제거
+def dropIfNotCountry(df, countryNames):
+    return df[df.index.isin(countryNames)]
+
+# 4. Country 열 추가
+def addCountryName(df, countryNames):
+    countries = []
+    for code in df.index: # index 순회 (국가 코드가 인덱스)
+        countries.append(countryNames[code]["label"]) # 국명 추가
+    df.insert(loc = 0,column = "Country", value = countries) # 국가명 열 삽입
+    return df
+
+# 5. 2025열 "GDP_USD_billion"으로 이름 변경하여 반환
+def renameGDP(df):
+    return df.rename(columns = {"2025":"GDP_USD_billion"})
+
+# 6. pycountry_convert 패키지 이용하여 국가명 -> Region으로 변환
 def addRegion(df):
     regions = []
-    for code in df["code"]:
-        if code == "UVK":
+    for code in df.index:   
+        if code == "UVK":   # 예외처리, 코소보
             region = "Europe"
-        elif code == "TLS":
+        elif code == "TLS": # 예외처리 동 티모르
             region = "Asia"
         else:
-            alpha2 = pycountry_convert.country_alpha3_to_country_alpha2(code)
-            regionCode = pycountry_convert.country_alpha2_to_continent_code(alpha2)
-            region = pycountry_convert.convert_continent_code_to_continent_name(regionCode)
+            alpha2 = pycountry_convert.country_alpha3_to_country_alpha2(code)   # 2글자 코드로
+            regionCode = pycountry_convert.country_alpha2_to_continent_code(alpha2) # 지역 코드로
+            region = pycountry_convert.convert_continent_code_to_continent_name(regionCode) # 지역명으로
         regions.append(region)
-    df["Region"] = regions
+    df["Region"] = regions # Region 열 삽입
     return df
 
+# 7. 인덱스 리셋하고 국가 코드 열 드랍
+def resetIndex(df):
+    return df.reset_index(drop = True)
+
+# Load process
+# SQL에 Table 로드
+# Table Name: Countries_by_GDP
+# Columns: Country TEXT
+#          GDP_USD_billion REAL
+#          Region TEXT
+def load(df):
+    path = "missions/W1/M3/World_Economies.db"
+    con = sqlite3.connect(path)
+    cursor = con.cursor()
+
+# 1. SQL Query 직접 작성
+    # 테이블 생성
+    sql = """
+    DROP TABLE IF EXISTS Countries_by_GDP;
+    CREATE TABLE Countries_by_GDP
+    (
+    Country TEXT PRIMARY KEY,
+    GDP_USD_billion REAL,
+    Region TEXT
+    );
+    """
+    cursor.executescript(sql)
+    con.commit()
+    
+    # 레이블 삽입
+    for row in df.itertuples(index = False):
+        sql = "INSERT INTO Countries_by_GDP(Country, GDP_USD_billion, Region) values (?, ?, ?)"
+        cursor.execute(sql, (row[0], row[1], row[2]))
+    con.commit()
+
+# 2. to_sql 메서드 사용
+# 쿼리 직접 써서 주석 처리함
+    # df.to_sql(name = "Countries_by_GDP", con = conn, if_exists = "replace", index = False,)
+    # conn.commit()
+
+    con.close()
+
+# Result
+# GDP가 100B 이상인 국가들 SQL query를 통해 출력
+def printCountriesOverGDP100B():
+    path = "missions/W1/M3/World_Economies.db"
+
+    if not os.path.isfile(path):    # 파일 검사
+        print("DB 파일 없음")
+        return
+    con = sqlite3.connect(path)
+    cursor = con.cursor()
+    sql = "SELECT Country, GDP_USD_billion FROM Countries_by_GDP WHERE GDP_USD_billion >= 100"
+    cursor.execute(sql)
+    
+    rows = cursor.fetchall()
+    print("Country                     | GDP_USD_billion")
+    for row in rows:
+        country = "%-27s" % row[0]
+        GDP = row[1]
+        print(country + " |", GDP)
+    print()
+
+# Region별로 top5 국가의 GDP avg
+def printAvgOfTop5ByRegion():
+    path = "missions/W1/M3/World_Economies.db"
+    if not os.path.isfile(path):    # 파일 검사
+        print("DB 파일 없음")
+        return
+    con = sqlite3.connect(path)
+    cursor = con.cursor()
+    # Region Distinct
+    sql = "SELECT DISTINCT Region FROM Countries_by_GDP"
+    cursor.execute(sql)
+    regions = cursor.fetchall()
+    
+    for region in regions:
+        region = region[0]
+        print(region + " average GDP of Top 5")
+        sql = "SELECT avg(GDP_USD_Billion) FROM Countries_by_GDP WHERE Region = '" + region + "'"
+        cursor.execute(sql)
+        print(round(cursor.fetchone()[0], 2), "B")
+    print()
+    con.close()
+
+# writeLog
+def writeLog(log):
+    now = dt.datetime.now()
+    log = now.strftime("%Y-%b-%d-%H-%M-%S, ") + log + "\n"
+    filePath = "missions/W1/M3/etl_project_log.txt"
+    f = open(filePath, "a")
+    f.write(log)
+    f.close()
+
 def main():
+    # Extract
+    writeLog("Extract start")
     jsGDP = getGDPJsonFromIMF()
     countryNames = getCountryNameDictFromIMF()
     df = getDFFromJson(jsGDP)
-    df = addCountryName(df, countryNames)
-    df = addRegion(df)
-    print(df)
+    writeLog("Extract finished")
+
+
+    # Transform
+    writeLog("Transform start")
+    df = roundGDP(df) # 1
+    df = sortByGDP(df) # 2
+    df = dropIfNotCountry(df, countryNames) # 3
+    df = addCountryName(df, countryNames) # 4
+    df = addRegion(df) # 4
+    df = resetIndex(df) # 5
+    df = renameGDP(df) # 6
+    writeLog("Transform finished")
+
+
+    # Load
+    writeLog("Load start")
+    load(df)
+    writeLog("Load finished")
+
+    # Result
+    printCountriesOverGDP100B()
+    printAvgOfTop5ByRegion()
 
 main()
-
-# 할 프로세스
-# 국가코드 -> 국가명 -> region
