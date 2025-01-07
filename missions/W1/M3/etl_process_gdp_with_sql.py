@@ -173,9 +173,9 @@ def printAvgOfTop5ByRegion():
 # writeLog
 def writeLog(log):
     now = dt.datetime.now()
-    log = now.strftime("%Y-%b-%d-%H-%M-%S, ") + log + "\n"
+    log = now.strftime("%Y-%b-%d-%H-%M-%S, ") + log + "\n" # Ex) 2025-Jan-06-18-04-01, Load start
     filePath = "missions/W1/M3/etl_project_log.txt"
-    f = open(filePath, "a")
+    f = open(filePath, "a") # append
     f.write(log)
     f.close()
 
