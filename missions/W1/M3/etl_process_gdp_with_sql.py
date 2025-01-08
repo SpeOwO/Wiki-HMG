@@ -48,7 +48,8 @@ def getCountryNameDictFromIMF():
 
 # Transform
 # 1. json 읽어 DF 생성
-# 
+# Parameter: Json object(NGDPD Raw data)
+# return: DataFrame(raw DataFrame)
 def getDFFromJson(js):
     js_values = js.get("values")
     js_NGDPD = js_values.get("NGDPD")
@@ -56,32 +57,46 @@ def getDFFromJson(js):
     return df
 
 # 2. 해당년도 GDP 컬럼 선택
+# Parameter: DataFrame(raw DataFrame)
+# return: DataFrame -> (국가코드 / 선택된 년도의 GDP 정보)
 def getGDPOfYear(df, year):
     return df[str(year)].to_frame()
 
 # 3. 2025열 "GDP_USD_billion"으로 이름 변경하여 반환
+# Parameter: DataFrame(국가코드 / 2025)
+# return: DataFrame(국가코드 / GDP_USD_billion)
 def renameGDP(df):
     df.columns = ["GDP_USD_billion", ]
     return df
 
 # 4. 결측값 제거
+# Parameter: DataFrame(국가코드 / GDP_USD_billion)
+# return: DataFrame(국가코드 / GDP_USD_billion) <- NaN값 있는 row 제거 됨
 def dropIfNaN(df):
     return df.dropna(axis = 0)
 
 # 5. GDP 소수 둘째 자리까지 반올림
+# Parameter: DataFrame(국가코드 / GDP_USD_billion)
+# return: DataFrame(국가코드 / GDP_USD_billion) GDP_USD_billion의 값 모두 소수 둘째 자리까지 반올림
 def roundGDP(df):
     df["GDP_USD_billion"] = df["GDP_USD_billion"].apply(lambda x:round(x, 2))
     return df
 
 # 6. GDP 순으로 정렬된 df 반환
+# Parameter: DataFrame(국가코드 / GDP_USD_billion)
+# return: sorted DataFrame(국가코드 / GDP_USD_billion) by GDP_USD_billion descending
 def sortByGDP(df):
     return df.sort_values("GDP_USD_billion", ascending = False)
 
 # 7. 국가가 아닌 row 제거
+# Parameter: DataFrame(국가코드 / GDP_USD_billion), dict countryNames
+# return: DataFrame(국가코드 / GDP_USD_billion) deleted row that is not country
 def dropIfNotCountry(df, countryNames):
     return df[df.index.isin(countryNames)]
 
 # 8. Country 열 추가
+# Parameter: DataFrame(국가코드 / GDP_USD_billion), dict countryNames
+# return: DataFrame(국가코드 / 국가명 + GDP_USD_billion)
 def addCountryName(df, countryNames):
     countries = []
     for code in df.index: # index 순회 (국가 코드가 인덱스)
@@ -90,6 +105,8 @@ def addCountryName(df, countryNames):
     return df
 
 # 9. pycountry_convert 패키지 이용하여 국가명 -> Region으로 변환
+# Parameter: DataFrame(국가코드 / 국가명 + GDP_USD_billion)
+# return: DataFrame(국가코드 / 국가명 + GDP_USD_billion + Region)
 def addRegion(df):
     regions = []
     for code in df.index:   
@@ -106,11 +123,15 @@ def addRegion(df):
     return df
 
 # 10. 인덱스 리셋하고 국가 코드 열 드랍
+# Parameter: DataFrame(국가코드 / 국가명 + GDP_USD_billion + Region)
+# return: DataFrame(국가명 + GDP_USD_billion + Region)
 def resetIndex(df):
     return df.reset_index(drop = True)
 
 # Load process
 # SQL에 Table 로드
+# Parameter: DataFrame (국가명 + GDP_USD_billion + Region)
+# return: X
 # Table Name: Countries_by_GDP
 # Columns: Country TEXT
 #          GDP_USD_billion REAL
@@ -149,6 +170,8 @@ def load(df):
 
 # Result
 # GDP가 100B 이상인 국가들 SQL query를 통해 출력
+# Parameter: X
+# return: X
 def printCountriesOverGDP100B():
     path = "missions/W1/M3/World_Economies.db"
 
@@ -171,6 +194,8 @@ def printCountriesOverGDP100B():
     print()
 
 # Region별로 top5 국가의 GDP avg
+# Parameter: X
+# return: X
 def printAvgOfTop5ByRegion():
     path = "missions/W1/M3/World_Economies.db"
     if not os.path.isfile(path):    # 파일 검사

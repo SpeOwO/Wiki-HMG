@@ -7,6 +7,7 @@ import datetime as dt
 import pycountry
 import pycountry_convert as pc
 
+a = BeautifulSoup
 """
 Function Name : exctract
 Type: Process
