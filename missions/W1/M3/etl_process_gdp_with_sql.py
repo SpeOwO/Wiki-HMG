@@ -8,6 +8,8 @@ import datetime as dt
 
 # Extract
 # 1. GDP json API request
+# Parameter: X
+# return json file of NGDPD 
 def getGDPJsonFromIMF():
     response = requests.get("https://www.imf.org/external/datamapper/api/v1/NGDPD") # IMF에서 GDP API 요청
     path = "missions/W1/M3/Countries_by_GDP_from_IMF.json"
@@ -21,6 +23,9 @@ def getGDPJsonFromIMF():
     return js
 
 # 1-1 json archiving
+# GDP 파일 버전 별로 저장
+# Parameter: Response object from IMF NGDPD API
+# return X
 def archiveGDPJson(response):
     version = 1
     path = "missions/W1/M3/archive/Countries_by_GDP_from_IMF"
@@ -31,6 +36,9 @@ def archiveGDPJson(response):
         f.write(response.text)
 
 # 2. Country Name Dictionary API request
+# {나라 코드: 나라명 딕셔너리}를 API request해서 받아옴
+# Parameter: X
+# return: 나라 Dict 받음 
 def getCountryNameDictFromIMF():
     response = requests.get("https://www.imf.org/external/datamapper/api/v1/countries") # IMF에서 국가 목록 API 리퀘스트
     countryNames = response.json()["countries"]
@@ -40,6 +48,7 @@ def getCountryNameDictFromIMF():
 
 # Transform
 # 1. json 읽어 DF 생성
+# 
 def getDFFromJson(js):
     js_values = js.get("values")
     js_NGDPD = js_values.get("NGDPD")
